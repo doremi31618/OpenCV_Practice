@@ -11,10 +11,13 @@ func ref : https://www.pyimagesearch.com/2014/08/25/4-point-opencv-getperspectiv
 document scaner ref : https://www.pyimagesearch.com/2014/09/01/build-kick-ass-mobile-document-scanner-just-5-minutes/
 @ 
 """
-
+from skimage.filters import threshold_local
+import argparse
 import numpy as np
 import cv2
+import imutils
 
+isUseArgParse=False
 
 def order_points(points):
     # inittialize a list of coordinate that will be ordered 
@@ -78,11 +81,81 @@ def four_point_transform(image, points):
         [0,0],
         [maxWidth, 0],
         [maxWidth, maxHeight],
-        [0,maxHeight]])
+        [0,maxHeight]], dtype="float32")
     
     M = cv2.getPerspectiveTransform(rect, dst)
     wraped = cv2.warpPerspective(image, M, (maxWidth, maxHeight)) 
 
     return wraped       
     
+def main():
     
+    # deal with image file path 
+    if isUseArgParse :
+        ap = argparse.ArgumentParser()
+        ap.add_argument("-i", "--image", required = True, help = "path to the image to be scanned")
+        args = vars(ap.parse_args())
+        imagePath = args["image"]
+    else:
+        imagePath = "image.jpg"
+    
+    image = cv2.imread(imagePath)
+    ratio = image.shape[0] / 500.0
+    orig = image.copy()
+    image = imutils.resize(image, height = 500)
+    
+    # step1 edge detection 
+    # flow : read image -> compute ratio
+    # image processing 
+    # 1. turn it into grayscale (cv2.cvtColor(image, cv2.COLOR_BGR2GRAY))
+    # 2. blur the grayscale image (cv2.GaussianBlur)
+    # 3. find edge (cv2.canny)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    cv2.imshow("gray", gray)
+    cv2.waitKey(0)
+    
+    gray = cv2.GaussianBlur(gray, (7,7), 0)
+    cv2.imshow("blur", gray)
+    cv2.waitKey(0)
+    
+    edge = cv2.Canny(gray, 75, 200)
+    cv2.imshow("edge", edge)
+    cv2.waitKey(0)
+    
+    # step 2 find contours
+    # the ref about cv.findContours()
+    # link :　https://blog.csdn.net/hjxu2016/article/details/77833336
+    cnts = cv2.findContours(edge.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = imutils.grab_contours(cnts)
+    cnts = sorted(cnts, key=cv2.contourArea, reverse=True)[:5]
+    
+    #loop over the contours 
+    for c in cnts:
+        #approximate the controus
+        peri = cv2.arcLength(c, True)
+        approx = cv2.approxPolyDP(c, 0.02 * peri ,True)
+        
+        #if our approximated contour has four points, then
+        #we can assume that we have found our documanet
+        if len(approx) == 4:
+            screenCnt = approx
+            break
+        
+    #show the contours (outline of the piece of paper)
+    cv2.drawContours(image, [screenCnt], -1, (0,255,0), 2)
+    cv2.imshow("outline", image)
+    cv2.waitKey(0)
+    
+    
+    #step3 apply a perspective transform & threshold
+    warped = four_point_transform(orig, screenCnt.reshape(4,2) * ratio)
+    
+    warped = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+    T = threshold_local(warped, 11, offset=10, method="gaussian")
+    warped = (warped > T).astype("uint8") * 255
+    cv2.imshow("sacnned", imutils.resize(warped, height=650))
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    
+    
+main()
