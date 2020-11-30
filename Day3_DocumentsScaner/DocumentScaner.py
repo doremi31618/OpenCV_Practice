@@ -72,10 +72,11 @@ def four_point_transform(image, points):
     
     #compute the height of the new image 
     #which will be the maximun distance between the top-right
-    #and the bottom right y-coordinate or the bottom-left y coordinate
+    #and the bottom right y-coordinate 
+    #or the bottom-left y coordinate
     heightA = np.sqrt(((bl[0] - tl[0])**2) + ((bl[1]-tl[1])**2))
     heightB = np.sqrt(((br[0] - tr[0])**2) + ((br[1]-tr[1])**2))
-    maxHeight = max(int(widthA), int(widthB))
+    maxHeight = max(int(heightA), int(heightB))
     
     dst = np.array([
         [0,0],
@@ -90,6 +91,7 @@ def four_point_transform(image, points):
     
 def main():
     
+    # Step0 : file preprocessing 
     # deal with image file path 
     if isUseArgParse :
         ap = argparse.ArgumentParser()
@@ -125,10 +127,13 @@ def main():
     # step 2 find contours
     # the ref about cv.findContours()
     # link :　https://blog.csdn.net/hjxu2016/article/details/77833336
+    # find tje contours in the edge image,
+    # keeping only the largest one 
+    # and initialize tje screen contour
     cnts = cv2.findContours(edge.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
     cnts = sorted(cnts, key=cv2.contourArea, reverse=True)[:5]
-    
+ 
     #loop over the contours 
     for c in cnts:
         #approximate the controus
@@ -150,10 +155,15 @@ def main():
     #step3 apply a perspective transform & threshold
     warped = four_point_transform(orig, screenCnt.reshape(4,2) * ratio)
     
+    #convert the wrap image to grayscale, then threshold it 
+    # to give it that 'black and white' paper effect'
+    
     warped = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+    cv2.imshow("gray_scan", imutils.resize(warped, height=500))
     T = threshold_local(warped, 11, offset=10, method="gaussian")
+ 
     warped = (warped > T).astype("uint8") * 255
-    cv2.imshow("sacnned", imutils.resize(warped, height=650))
+    cv2.imshow("sacnned_threshold", imutils.resize(warped, height=500))
     cv2.waitKey(0)
     cv2.destroyAllWindows()
     
